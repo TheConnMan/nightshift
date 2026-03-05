@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/marcus/nightshift/internal/config"
@@ -61,6 +62,8 @@ type Generator struct {
 	cfg    *config.Config
 	logger *logging.Logger
 }
+
+var summaryFileMu sync.Mutex
 
 // NewGenerator creates a summary generator with the given configuration.
 func NewGenerator(cfg *config.Config) *Generator {
@@ -263,6 +266,51 @@ func (g *Generator) Save(summary *Summary, path string) error {
 	}
 
 	g.logger.Infof("summary saved to %s", path)
+	return nil
+}
+
+// Append appends a run summary to an existing summary file for the same day.
+func (g *Generator) Append(summary *Summary, path string) error {
+	if summary == nil {
+		return fmt.Errorf("summary cannot be nil")
+	}
+
+	path = expandPath(path)
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("creating summary directory: %w", err)
+	}
+
+	content := strings.TrimRight(summary.Content, "\n")
+	if content == "" {
+		return fmt.Errorf("summary content cannot be empty")
+	}
+
+	summaryFileMu.Lock()
+	defer summaryFileMu.Unlock()
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("opening summary file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	info, err := f.Stat()
+	if err != nil {
+		return fmt.Errorf("stating summary file: %w", err)
+	}
+
+	entry := content + "\n"
+	if info.Size() > 0 {
+		entry = "\n\n---\n\n" + entry
+	}
+
+	if _, err := f.WriteString(entry); err != nil {
+		return fmt.Errorf("appending summary file: %w", err)
+	}
+
+	g.logger.Infof("summary appended to %s", path)
 	return nil
 }
 

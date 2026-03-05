@@ -65,10 +65,10 @@ func (r *runReport) finalize(cfg *config.Config, log *logging.Logger) {
 			log.Warnf("summary generate: %v", err)
 		} else {
 			path := reporting.DefaultSummaryPath(r.results.Date)
-			if err := gen.Save(summary, path); err != nil {
-				log.Warnf("summary save: %v", err)
+			if err := gen.Append(summary, path); err != nil {
+				log.Warnf("summary append: %v", err)
 			} else {
-				log.Infof("summary saved: %s", path)
+				log.Infof("summary updated: %s", path)
 			}
 		}
 	}

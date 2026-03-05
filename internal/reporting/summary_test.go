@@ -210,6 +210,76 @@ func TestSave(t *testing.T) {
 	}
 }
 
+func TestAppend(t *testing.T) {
+	cfg := &config.Config{}
+	gen := NewGenerator(cfg)
+
+	first := &Summary{
+		Date:    time.Date(2024, 1, 15, 2, 0, 0, 0, time.UTC),
+		Content: "# First run\n\nalpha",
+	}
+	second := &Summary{
+		Date:    time.Date(2024, 1, 15, 3, 0, 0, 0, time.UTC),
+		Content: "# Second run\n\nbeta",
+	}
+
+	tmpDir, err := os.MkdirTemp("", "nightshift-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	path := filepath.Join(tmpDir, "summaries", "summary-2024-01-15.md")
+
+	if err := gen.Append(first, path); err != nil {
+		t.Fatalf("Append first summary failed: %v", err)
+	}
+	if err := gen.Append(second, path); err != nil {
+		t.Fatalf("Append second summary failed: %v", err)
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("Failed to read appended summary: %v", err)
+	}
+
+	got := string(content)
+	if !strings.HasPrefix(got, first.Content+"\n") {
+		t.Errorf("First entry missing or misplaced: %q", got)
+	}
+	if !strings.Contains(got, second.Content+"\n") {
+		t.Errorf("Second entry missing: %q", got)
+	}
+	if strings.Count(got, "\n\n---\n\n") != 1 {
+		t.Errorf("Expected one run separator, got %d", strings.Count(got, "\n\n---\n\n"))
+	}
+}
+
+func TestAppendNilSummary(t *testing.T) {
+	cfg := &config.Config{}
+	gen := NewGenerator(cfg)
+
+	err := gen.Append(nil, "/tmp/test.md")
+	if err == nil {
+		t.Error("Append should fail with nil summary")
+	}
+}
+
+func TestAppendEmptyContent(t *testing.T) {
+	cfg := &config.Config{}
+	gen := NewGenerator(cfg)
+
+	summary := &Summary{
+		Date:    time.Now(),
+		Content: "\n\n",
+	}
+
+	err := gen.Append(summary, "/tmp/test.md")
+	if err == nil {
+		t.Error("Append should fail with empty summary content")
+	}
+}
+
 func TestSaveNilSummary(t *testing.T) {
 	cfg := &config.Config{}
 	gen := NewGenerator(cfg)
